@@ -47,4 +47,14 @@ async def bot_webapp_token(payload: WebAppTokenIn, db: AsyncSession = Depends(ge
         return {"ok": False, "error": "User not registered"}
 
     token = create_webapp_token(user.id)
-    return {"ok": True, "token": token}
+
+    return {
+        "ok": True,
+        "token": token,
+        "user": {
+            "id": user.id,
+            "telegram_id": user.telegram_id,
+            "full_name": user.full_name,
+            "role": user.role,
+        },
+    }
