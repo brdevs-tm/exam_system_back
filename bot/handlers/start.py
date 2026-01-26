@@ -1,24 +1,33 @@
 import asyncio
 import aiohttp
-from aiogram import Router
-from aiogram.filters import Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
-from config import API_URL, WEBAPP_URL
+from aiogram import Router, types
+from aiogram.filters import Command
+from aiogram.types import (
+    Message,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    WebAppInfo,
+)
+
+from config import API_URL, WEBAPP_URL  # bitta joydan olamiz
 
 router = Router()
+
 
 @router.message(Command("start"))
 async def start_cmd(message: Message):
     payload = {
         "telegram_id": message.from_user.id,
-        "full_name": (message.from_user.full_name or "").strip() or None
+        "full_name": (message.from_user.full_name or "").strip() or None,
     }
 
     try:
         async with aiohttp.ClientSession() as session:
+            # register
             await session.post(f"{API_URL}/api/bot/register", json=payload)
 
+            # token
             async with session.post(
                 f"{API_URL}/api/bot/webapp-token",
                 json={"telegram_id": message.from_user.id},
@@ -42,8 +51,6 @@ async def start_cmd(message: Message):
         return
 
     token = data["token"]
-
-    # ✅ Fallback: telegram_id ham berib yuboramiz
     webapp_link = f"{WEBAPP_URL}?token={token}&telegram_id={message.from_user.id}"
 
     is_localhost = WEBAPP_URL.startswith("http://localhost") or WEBAPP_URL.startswith("http://127.0.0.1")
@@ -63,11 +70,34 @@ async def start_cmd(message: Message):
         )
         return
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(
-            text="📝 Imtihon Paneliga Kirish",
-            web_app=WebAppInfo(url=webapp_link)
-        )
-    ]])
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📝 Imtihon Paneliga Kirish",
+                    web_app=WebAppInfo(url=webapp_link),
+                )
+            ]
+        ]
+    )
 
     await message.answer("Panelga kirish uchun tugmani bosing:", reply_markup=keyboard)
+
+
+@router.message(Command("teacher"))
+async def become_teacher_cmd(message: types.Message):
+    parts = (message.text or "").split(maxsplit=1)
+    secret = parts[1].strip() if len(parts) > 1 else ""
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"{API_URL}/api/bot/become-teacher",
+            json={"telegram_id": message.from_user.id, "secret": secret},
+        ) as resp:
+            data = await resp.json()
+
+    if data.get("ok"):
+        await message.answer("✅ Siz Teacher bo‘ldingiz. Endi exam yarata olasiz.")
+    else:
+        await message.answer("❌ Secret xato yoki user topilmadi.")
+
