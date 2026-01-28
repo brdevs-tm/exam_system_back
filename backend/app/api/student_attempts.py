@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -38,10 +38,36 @@ async def start_exam(
             ExamAttempt.is_active == True,
         )
     )
-    if q2.scalar_one_or_none():
-        return {"ok": True, "status": "already_started"}
+    existing = q2.scalar_one_or_none()
+    if existing:
+        # Frontend kutayotgan formatga yaqin qilib qaytaramiz
+        return {
+            "ok": True,
+            "status": "already_started",
+            "attempt_id": existing.id,
+            "exam_id": exam_id,
+            "student": {
+                "telegram_id": student.telegram_id,
+                "full_name": student.full_name,
+            },
+            "started_at": (
+                existing.started_at.isoformat()
+                if getattr(existing, "started_at", None)
+                else None
+            ),
+        }
 
-    attempt = ExamAttempt(exam_id=exam_id, user_id=student.id)
+    now = datetime.now(timezone.utc)
+
+    # Eslatma: sening model field'laringga moslab berildi:
+    # oldin (exam_id, user_id) ishlatilgan, shuni saqlab qoldik.
+    attempt = ExamAttempt(
+        exam_id=exam_id,
+        user_id=student.id,
+        started_at=now,
+        is_active=True,
+    )
+
     db.add(attempt)
     await db.commit()
     await db.refresh(attempt)
@@ -60,7 +86,19 @@ async def start_exam(
     except Exception as e:
         print("WS broadcast error:", e)
 
-    return {"ok": True, "attempt_id": attempt.id}
+    # 🔥 MUHIM: Frontend kutayotgan format
+    return {
+        "ok": True,
+        "attempt_id": attempt.id,
+        "exam_id": exam_id,
+        "student": {
+            "telegram_id": student.telegram_id,
+            "full_name": student.full_name,
+        },
+        "started_at": attempt.started_at.isoformat()
+        if getattr(attempt, "started_at", None)
+        else now.isoformat(),
+    }
 
 
 @router.post("/attempts/{attempt_id}/finish")

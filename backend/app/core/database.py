@@ -1,7 +1,15 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.config import settings
 
+# ==========================
+# SQLALCHEMY BASE (MODELS)
+# ==========================
+Base = declarative_base()
+
+# ==========================
+# DATABASE CONFIG
+# ==========================
 DATABASE_URL = (
     f"postgresql+asyncpg://{settings.DB_USER}:"
     f"{settings.DB_PASSWORD}@"
@@ -10,12 +18,27 @@ DATABASE_URL = (
     f"{settings.DB_NAME}"
 )
 
-engine = create_async_engine(DATABASE_URL, echo=True)
-
-AsyncSessionLocal = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=True,
+    future=True
 )
 
+AsyncSessionLocal = sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+# ==========================
+# FASTAPI DEPENDENCY
+# ==========================
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
+
+# ==========================
+# DEBUG
+# ==========================
+print("✅ database.py LOADED OK")
+print("✅ Base exists:", "Base" in globals())
