@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -15,6 +15,12 @@ from app.services.telegram import tg_send_message
 router = APIRouter(prefix="/api/teacher", tags=["teacher"])
 
 
+def ensure_aware_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 class ExamCreateIn(BaseModel):
     title: str
     description: str | None = None
@@ -28,14 +34,17 @@ async def create_exam(
     teacher: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
-    if payload.ends_at <= payload.starts_at:
+    starts_at = ensure_aware_utc(payload.starts_at)
+    ends_at = ensure_aware_utc(payload.ends_at)
+
+    if ends_at <= starts_at:
         raise HTTPException(status_code=400, detail="ends_at must be after starts_at")
 
     exam = Exam(
         title=payload.title.strip(),
         description=payload.description,
-        starts_at=payload.starts_at,
-        ends_at=payload.ends_at,
+        starts_at=starts_at,
+        ends_at=ends_at,
         is_active=False,
         created_by=teacher.id,
     )
@@ -43,15 +52,14 @@ async def create_exam(
     await db.commit()
     await db.refresh(exam)
 
-    # Teacher'ga bot orqali xabar (demo) — exam create'ni yiqitmaydi
-    if teacher.telegram_id:
+    if getattr(teacher, "telegram_id", None):
         try:
             await tg_send_message(
                 chat_id=teacher.telegram_id,
                 text=(
                     f"✅ Exam yaratildi: {exam.title}\n"
-                    f"Start: {exam.starts_at}\n"
-                    f"End: {exam.ends_at}"
+                    f"Start: {exam.starts_at.isoformat()}\n"
+                    f"End: {exam.ends_at.isoformat()}"
                 ),
             )
         except Exception as e:
@@ -79,13 +87,58 @@ async def list_my_exams(
                 "id": e.id,
                 "title": e.title,
                 "description": e.description,
-                "starts_at": e.starts_at,
-                "ends_at": e.ends_at,
-                "is_active": e.is_active,
+                "starts_at": e.starts_at.isoformat() if e.starts_at else None,
+                "ends_at": e.ends_at.isoformat() if e.ends_at else None,
+                "is_active": bool(e.is_active),
             }
             for e in exams
         ],
     }
+
+
+class ExamActiveIn(BaseModel):
+    is_active: bool
+
+
+@router.patch("/exams/{exam_id}/active")
+async def set_exam_active(
+    exam_id: int,
+    payload: ExamActiveIn,
+    teacher: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    q = await db.execute(
+        select(Exam).where(Exam.id == exam_id, Exam.created_by == teacher.id)
+    )
+    exam = q.scalar_one_or_none()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    exam.is_active = bool(payload.is_active)
+    await db.commit()
+    await db.refresh(exam)
+
+    return {"ok": True, "exam_id": exam.id, "is_active": bool(exam.is_active)}
+
+
+@router.patch("/exams/{exam_id}/toggle")
+async def toggle_exam_active(
+    exam_id: int,
+    teacher: User = Depends(require_teacher),
+    db: AsyncSession = Depends(get_db),
+):
+    q = await db.execute(
+        select(Exam).where(Exam.id == exam_id, Exam.created_by == teacher.id)
+    )
+    exam = q.scalar_one_or_none()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    exam.is_active = not bool(exam.is_active)
+    await db.commit()
+    await db.refresh(exam)
+
+    return {"ok": True, "exam_id": exam.id, "is_active": bool(exam.is_active)}
 
 
 class AssignIn(BaseModel):
@@ -123,13 +176,13 @@ async def assign_exam(
         await db.rollback()
         return {"ok": True, "status": "already_assigned"}
 
-    if student.telegram_id:
+    if getattr(student, "telegram_id", None):
         try:
             await tg_send_message(
                 chat_id=student.telegram_id,
                 text=(
                     f"📝 Sizga yangi imtihon biriktirildi: {exam.title}\n"
-                    f"Boshlanish: {exam.starts_at}"
+                    f"Boshlanish: {exam.starts_at.isoformat()}"
                 ),
             )
         except Exception as e:

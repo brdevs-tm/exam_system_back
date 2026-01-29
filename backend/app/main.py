@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-
+import app.models
 from app.core.config import settings
 
 from app.api.routes import router as api_router

@@ -1,8 +1,10 @@
-from sqlalchemy import String, Boolean, ForeignKey, Text, DateTime
-from sqlalchemy.orm import Mapped, mapped_column
-from datetime import datetime
+from __future__ import annotations
 
-from app.models.user import Base
+from sqlalchemy import String, Text, DateTime, Boolean, Integer, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.database import Base
+
 
 class Exam(Base):
     __tablename__ = "exams"
@@ -12,9 +14,12 @@ class Exam(Base):
     title: Mapped[str] = mapped_column(String(150))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))
-    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=False))
+    # ✅ asyncpg bilan muammo bo‘lmasligi uchun timezone=True
+    starts_at: Mapped[object] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[object] = mapped_column(DateTime(timezone=True))
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
+
+    attempts = relationship("ExamAttempt", back_populates="exam", cascade="all, delete-orphan")
