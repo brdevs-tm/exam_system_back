@@ -11,6 +11,8 @@ from app.api.student_attempts import router as student_attempt_router
 from app.api.cheat import router as cheat_router
 from app.api.auth import router as auth_router
 from app.ws.routes import router as ws_router
+from app.api.teacher_questions import router as teacher_questions_router
+from app.api.student_attempts import router as student_attempts_router
 
 
 app = FastAPI(title=settings.APP_NAME)
@@ -32,6 +34,8 @@ app.include_router(student_router)
 app.include_router(student_attempt_router)
 app.include_router(cheat_router)
 app.include_router(ws_router)
+app.include_router(teacher_questions_router)
+app.include_router(student_attempts_router)
 
 
 # Models (dev/test uchun)

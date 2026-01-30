@@ -23,3 +23,6 @@ class Exam(Base):
     created_by: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
 
     attempts = relationship("ExamAttempt", back_populates="exam", cascade="all, delete-orphan")
+
+    questions = relationship("Question", back_populates="exam", cascade="all, delete-orphan",)
+

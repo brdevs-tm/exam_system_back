@@ -1,4 +1,5 @@
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, func
+from datetime import datetime
+from sqlalchemy import DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -9,13 +10,23 @@ class ExamAttempt(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id"))
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
-    started_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    finished_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    exam = relationship("Exam", back_populates="attempts")
+    # ✅ User bilan
     user = relationship("User", back_populates="attempts")
+
+    # ✅ AttemptAnswer bilan (mana shu yetishmayapti)
+    answers = relationship(
+        "AttemptAnswer",
+        back_populates="attempt",
+        cascade="all, delete-orphan",
+    )
+
+    # ixtiyoriy:
+    exam = relationship("Exam")
